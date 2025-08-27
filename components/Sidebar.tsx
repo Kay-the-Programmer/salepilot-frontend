@@ -37,6 +37,7 @@ const ALL_NAV_ITEMS = [
     { name: 'Audit Trail', page: 'audit-trail', icon: <DocumentMagnifyingGlassIcon className="w-5 h-5" />, roles: ['admin'] },
     { name: 'Users', page: 'users', icon: <UserIcon className="w-5 h-5" />, roles: ['admin'] },
     { name: 'Settings', page: 'settings', icon: <AdjustmentsHorizontalIcon className="w-5 h-5" />, roles: ['admin'] },
+    { name: 'Profile', page: 'profile', icon: <UserIcon className="w-5 h-5" />, roles: ['admin', 'staff', 'inventory_manager'] },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, user, onLogout, isOnline }) => {

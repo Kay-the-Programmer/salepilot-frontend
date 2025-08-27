@@ -92,15 +92,28 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onLogout, installPrompt
 
                                 <InfoCard title="Security & Account Actions">
                                 <div className="space-y-4">
-                                    {installPrompt && (
-                                        <button
-                                            onClick={onInstall}
-                                            className="w-full text-left p-3 rounded-md hover:bg-gray-100 flex justify-between items-center text-sm font-medium text-blue-600"
-                                        >
-                                            <span>Install App on this Device</span>
-                                            <ArrowDownTrayIcon className="w-5 h-5"/>
-                                        </button>
-                                    )}
+                                    <button
+                                        onClick={() => {
+                                            if (installPrompt) {
+                                                onInstall();
+                                            } else {
+                                                const ua = window.navigator.userAgent || '';
+                                                const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+                                                const isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || (window as any).navigator.standalone;
+                                                if (isStandalone) {
+                                                    alert('The app is already installed and running in standalone mode.');
+                                                } else if (isIOS) {
+                                                    alert('To install this app on iOS: 1) Tap the Share button in Safari, 2) Choose "Add to Home Screen".');
+                                                } else {
+                                                    alert('Install prompt is not available yet. Try visiting a few pages and then return here, or use your browser menu: Install App/Add to Home Screen.');
+                                                }
+                                            }
+                                        }}
+                                        className="w-full text-left p-3 rounded-md hover:bg-gray-100 flex justify-between items-center text-sm font-medium text-blue-600"
+                                    >
+                                        <span>Install App on this Device</span>
+                                        <ArrowDownTrayIcon className="w-5 h-5"/>
+                                    </button>
                                     <button onClick={() => setIsChangePasswordModalOpen(true)} className="w-full text-left p-3 rounded-md hover:bg-gray-100 flex justify-between items-center text-sm font-medium text-gray-700">
                                         <span>Change Password</span>
                                         <span>›</span>

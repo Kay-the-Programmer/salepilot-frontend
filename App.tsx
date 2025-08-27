@@ -87,9 +87,17 @@ const App: React.FC = () => {
             console.log("Install prompt captured");
             setInstallPrompt(e);
         };
-        window.addEventListener('beforeinstallprompt', handler);
+        const onInstalled = () => {
+            setInstallPrompt(null);
+            try { console.log('App installed'); } catch {}
+        };
+        window.addEventListener('beforeinstallprompt', handler as any);
+        window.addEventListener('appinstalled', onInstalled);
 
-        return () => window.removeEventListener('beforeinstallprompt', handler);
+        return () => {
+            window.removeEventListener('beforeinstallprompt', handler as any);
+            window.removeEventListener('appinstalled', onInstalled);
+        };
     }, []);
 
     const handleInstall = () => {

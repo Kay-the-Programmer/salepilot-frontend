@@ -1,5 +1,13 @@
 
 
+export interface ProductVariant {
+    name?: string; // e.g., size/color label
+    sku: string;
+    price: number;
+    stock: number;
+    unitOfMeasure?: 'unit' | 'kg';
+}
+
 export interface Product {
     id: string;
     name: string;
@@ -11,10 +19,15 @@ export interface Product {
     price: number; // Retail Price
     costPrice?: number;
     stock: number;
+    unitOfMeasure?: 'unit' | 'kg';
     imageUrls: string[];
     supplierId?: string;
     brand?: string;
     reorderPoint?: number;
+    safetyStock?: number;
+    weight?: number; // kg
+    dimensions?: string; // e.g., "W x H x D cm"
+    variants?: ProductVariant[];
     status: 'active' | 'archived';
     customAttributes?: { [attributeId: string]: string };
 }
@@ -32,6 +45,7 @@ export interface CartItem {
     price: number;
     quantity: number;
     stock: number; // To check against when increasing quantity
+    unitOfMeasure?: 'unit' | 'kg';
     returnedQuantity?: number;
     costPrice?: number; // Cost of the item at the time of sale
 }

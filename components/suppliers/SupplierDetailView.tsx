@@ -1,6 +1,8 @@
 import React from 'react';
 import { Supplier, Product } from '../../types';
 import PencilIcon from '../icons/PencilIcon';
+import ShoppingCartIcon from '../icons/ShoppingCartIcon';
+import { buildAssetUrl } from '@/services/api';
 
 interface SupplierDetailViewProps {
     supplier: Supplier;
@@ -70,14 +72,20 @@ const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({ supplier, produ
                             <ul role="list" className="divide-y divide-gray-200 -mt-4">
                                 {products.map((product) => (
                                     <li key={product.id} className="py-4 flex items-center">
-                                        <img className="h-10 w-10 rounded-full object-cover" src={product.imageUrls[0]} alt="" />
+                                        {product.imageUrls[0] ? (
+                                            <img className="h-10 w-10 rounded-full object-cover" src={buildAssetUrl(product.imageUrls[0])} alt={product.name} />
+                                        ) : (
+                                            <div className="h-10 w-10 rounded-full bg-gray-100 border border-dashed border-gray-300 flex items-center justify-center text-gray-400">
+                                                <ShoppingCartIcon className="w-5 h-5" />
+                                            </div>
+                                        )}
                                         <div className="ml-3">
                                             <p className="text-sm font-medium text-gray-900">{product.name}</p>
                                             <p className="text-sm text-gray-500">{product.sku}</p>
                                         </div>
                                         <div className="ml-auto text-right">
                                             <p className="text-sm text-gray-900">{product.stock} in stock</p>
-                                             <p className="text-sm text-gray-500">${product.price.toFixed(2)}</p>
+                                             <p className="text-sm text-gray-500">${product.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                         </div>
                                     </li>
                                 ))}

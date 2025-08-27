@@ -10,9 +10,10 @@ interface SalesInvoiceDetailModalProps {
     invoice: Sale;
     onRecordPayment: (invoice: Sale) => void;
     storeSettings: StoreSettings;
+    customerName?: string;
 }
 
-const SalesInvoiceDetailModal: React.FC<SalesInvoiceDetailModalProps> = ({ isOpen, onClose, invoice, onRecordPayment, storeSettings }) => {
+const SalesInvoiceDetailModal: React.FC<SalesInvoiceDetailModalProps> = ({ isOpen, onClose, invoice, onRecordPayment, storeSettings, customerName }) => {
     if (!isOpen) return null;
 
     const balanceDue = invoice.total - invoice.amountPaid;
@@ -56,7 +57,7 @@ const SalesInvoiceDetailModal: React.FC<SalesInvoiceDetailModalProps> = ({ isOpe
                         <div class="details">
                             <div>
                                 <strong>Bill To:</strong><br>
-                                ${invoice.customerName || 'N/A'}
+                                ${customerName || invoice.customerName || 'N/A'}
                             </div>
                             <div class="text-right">
                                 <strong>Invoice #:</strong> ${invoice.transactionId}<br>
@@ -139,7 +140,7 @@ const SalesInvoiceDetailModal: React.FC<SalesInvoiceDetailModalProps> = ({ isOpe
                     <div className="grid grid-cols-2 gap-8 mb-6">
                         <div>
                             <h4 className="font-semibold text-gray-800">Bill To:</h4>
-                            <p>{invoice.customerName}</p>
+                            <p>{customerName || invoice.customerName || 'Unknown Customer'}</p>
                         </div>
                         <div className="text-right">
                             <p><strong>Invoice Date:</strong> {new Date(invoice.timestamp).toLocaleDateString()}</p>

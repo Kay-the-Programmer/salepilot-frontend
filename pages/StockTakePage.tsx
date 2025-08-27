@@ -25,7 +25,7 @@ const StockTakePage: React.FC<StockTakePageProps> = ({ session, onStart, onUpdat
         if (value === '') {
             onUpdateItem(productId, null);
         } else {
-            const numValue = parseInt(value, 10);
+            const numValue = parseFloat(value);
             if (!isNaN(numValue) && numValue >= 0) {
                 onUpdateItem(productId, numValue);
             }
@@ -74,7 +74,7 @@ const StockTakePage: React.FC<StockTakePageProps> = ({ session, onStart, onUpdat
         if (!session) return [];
         return session.items
             .filter(item => {
-                const searchMatch = !searchTerm || item.name.toLowerCase().includes(searchTerm.toLowerCase()) || item.sku.toLowerCase().includes(searchTerm.toLowerCase());
+                const searchMatch = !searchTerm || item.name.toLowerCase().includes(searchTerm.toLowerCase()) || (item.sku ? item.sku.toLowerCase().includes(searchTerm.toLowerCase()) : false);
                 if (!searchMatch) return false;
 
                 switch (filter) {
@@ -122,8 +122,8 @@ const StockTakePage: React.FC<StockTakePageProps> = ({ session, onStart, onUpdat
     );
 
     return (
-        <div className="flex flex-col h-full bg-gray-50">
-            <header className="bg-white shadow-sm z-10 p-4 border-b">
+        <div className="flex flex-col h-full bg-gray-100">
+            <header className="bg-gray-100 shadow-sm z-10 p-4 border-b">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Stock Take in Progress</h1>
@@ -185,7 +185,7 @@ const StockTakePage: React.FC<StockTakePageProps> = ({ session, onStart, onUpdat
                                         return (
                                         <tr key={item.productId} className={item.counted !== null ? (discrepancy === 0 ? 'bg-green-50' : 'bg-red-50') : ''}>
                                             <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">{item.name}</td>
-                                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{item.sku}</td>
+                                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{item.sku || '-'}</td>
                                             <td className="whitespace-nowrap px-3 py-4 text-center text-sm text-gray-700">{item.expected}</td>
                                             <td className="whitespace-nowrap px-3 py-4 text-sm">
                                                 <input
@@ -194,6 +194,7 @@ const StockTakePage: React.FC<StockTakePageProps> = ({ session, onStart, onUpdat
                                                     value={item.counted ?? ''}
                                                     onChange={e => handleCountChange(item.productId, e.target.value)}
                                                     min="0"
+                                                    step="any"
                                                     className="block w-24 mx-auto p-1 border rounded-md text-center focus:ring-blue-500 focus:border-blue-500"
                                                 />
                                             </td>

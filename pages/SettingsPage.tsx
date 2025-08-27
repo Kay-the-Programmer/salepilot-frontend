@@ -73,6 +73,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSave }) => {
     const [newPaymentMethod, setNewPaymentMethod] = useState('');
     const [newSupplierPaymentMethod, setNewSupplierPaymentMethod] = useState('');
 
+    // Shared input styles for better visibility and accessibility
+    const inputFieldClasses = "block w-full rounded-md bg-white border border-gray-300 ring-1 ring-inset ring-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm";
+
     useEffect(() => {
         setCurrentSettings(settings);
     }, [settings]);
@@ -140,7 +143,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSave }) => {
          <div className="py-2 grid grid-cols-3 gap-4 items-center">
             <label htmlFor={name} className="block text-sm font-medium text-gray-700">{label}</label>
             <div className="col-span-2">
-                 <input type={type} name={name} id={name} value={(currentSettings as any)[name]} onChange={handleChange} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" {...props} />
+                 <input type={type} name={name} id={name} value={(currentSettings as any)[name]} onChange={handleChange} className={inputFieldClasses} {...props} />
             </div>
         </div>
     );
@@ -194,9 +197,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSave }) => {
                                 <div className="py-2 grid grid-cols-3 gap-4 items-start">
                                     <label className="block text-sm font-medium text-gray-700 pt-2">Currency</label>
                                     <div className="col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                         <input type="text" name="currency.symbol" value={currentSettings.currency.symbol} onChange={handleChange} placeholder="Symbol (e.g., $)" className="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
-                                         <input type="text" name="currency.code" value={currentSettings.currency.code} onChange={handleChange} placeholder="Code (e.g., USD)" className="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
-                                         <select name="currency.position" value={currentSettings.currency.position} onChange={handleChange} className="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm">
+                                         <input type="text" name="currency.symbol" value={currentSettings.currency.symbol} onChange={handleChange} placeholder="Symbol (e.g., $)" className={inputFieldClasses} />
+                                         <input type="text" name="currency.code" value={currentSettings.currency.code} onChange={handleChange} placeholder="Code (e.g., USD)" className={inputFieldClasses} />
+                                         <select name="currency.position" value={currentSettings.currency.position} onChange={handleChange} className={inputFieldClasses}>
                                             <option value="before">Before amount</option>
                                             <option value="after">After amount</option>
                                          </select>
@@ -226,7 +229,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSave }) => {
                                 <div>
                                     <label htmlFor="receiptMessage" className="block text-sm font-medium text-gray-700">Receipt Footer Message</label>
                                     <div className="mt-1">
-                                        <textarea id="receiptMessage" name="receiptMessage" value={currentSettings.receiptMessage} onChange={handleChange} rows={3} className="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
+                                        <textarea id="receiptMessage" name="receiptMessage" value={currentSettings.receiptMessage} onChange={handleChange} rows={3} className={inputFieldClasses} />
                                     </div>
                                 </div>
                                 <div className="relative flex items-start">
@@ -241,12 +244,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSave }) => {
                                     <h4 className="text-sm font-medium text-gray-700">Customer Payment Methods</h4>
                                     {(currentSettings.paymentMethods || []).map((pm, index) => (
                                         <div key={pm.id} className="flex items-center gap-2">
-                                            <input type="text" value={pm.name} onChange={(e) => handlePaymentMethodChange('paymentMethods', index, e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
+                                            <input type="text" value={pm.name} onChange={(e) => handlePaymentMethodChange('paymentMethods', index, e.target.value)} className={inputFieldClasses} />
                                             <button type="button" onClick={() => removePaymentMethod('paymentMethods', pm.id)} className="text-red-500 hover:text-red-700 p-1 rounded-full"><TrashIcon className="w-5 h-5"/></button>
                                         </div>
                                     ))}
                                     <div className="flex items-center gap-2">
-                                        <input type="text" value={newPaymentMethod} onChange={(e) => setNewPaymentMethod(e.target.value)} placeholder="New method name" className="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
+                                        <input type="text" value={newPaymentMethod} onChange={(e) => setNewPaymentMethod(e.target.value)} placeholder="New method name" className={inputFieldClasses} />
                                         <button type="button" onClick={() => addPaymentMethod('paymentMethods', newPaymentMethod, setNewPaymentMethod)} className="inline-flex items-center rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"><PlusIcon className="w-5 h-5"/></button>
                                     </div>
                                 </div>
@@ -254,12 +257,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSave }) => {
                                     <h4 className="text-sm font-medium text-gray-700">Supplier Payment Methods</h4>
                                     {(currentSettings.supplierPaymentMethods || []).map((pm, index) => (
                                         <div key={pm.id} className="flex items-center gap-2">
-                                            <input type="text" value={pm.name} onChange={(e) => handlePaymentMethodChange('supplierPaymentMethods', index, e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
+                                            <input type="text" value={pm.name} onChange={(e) => handlePaymentMethodChange('supplierPaymentMethods', index, e.target.value)} className={inputFieldClasses} />
                                             <button type="button" onClick={() => removePaymentMethod('supplierPaymentMethods', pm.id)} className="text-red-500 hover:text-red-700 p-1 rounded-full"><TrashIcon className="w-5 h-5"/></button>
                                         </div>
                                     ))}
                                     <div className="flex items-center gap-2">
-                                        <input type="text" value={newSupplierPaymentMethod} onChange={(e) => setNewSupplierPaymentMethod(e.target.value)} placeholder="New method name" className="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
+                                        <input type="text" value={newSupplierPaymentMethod} onChange={(e) => setNewSupplierPaymentMethod(e.target.value)} placeholder="New method name" className={inputFieldClasses} />
                                         <button type="button" onClick={() => addPaymentMethod('supplierPaymentMethods', newSupplierPaymentMethod, setNewSupplierPaymentMethod)} className="inline-flex items-center rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"><PlusIcon className="w-5 h-5"/></button>
                                     </div>
                                 </div>

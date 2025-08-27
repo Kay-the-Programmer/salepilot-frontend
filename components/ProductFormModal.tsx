@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Product, Category, CustomAttribute, Supplier, StoreSettings } from '../types';
 import { generateDescription as fetchAIDescription } from '../services/geminiService';
+import { api } from '../services/api';
 import SparklesIcon from './icons/SparklesIcon';
 import XMarkIcon from './icons/XMarkIcon';
 import CameraIcon from './icons/CameraIcon';
@@ -34,11 +35,18 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
         supplierId: undefined,
         brand: '',
         reorderPoint: 0,
+        safetyStock: 0,
+        weight: 0,
+        dimensions: '',
+        variants: [],
         customAttributes: {},
+        unitOfMeasure: 'unit',
     });
 
     const [product, setProduct] = useState<Omit<Product, 'id'>>(getInitialProductState());
     const [images, setImages] = useState<string[]>([]);
+    const [imageFiles, setImageFiles] = useState<File[]>([]);
+    const [imagesToDelete, setImagesToDelete] = useState<string[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
@@ -55,6 +63,9 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
                 setProduct(getInitialProductState());
                 setImages([]);
             }
+            // Reset file-related states
+            setImageFiles([]);
+            setImagesToDelete([]);
             setError('');
             setIsSaving(false);
         }
@@ -62,7 +73,8 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        const numericFields = ['stock', 'reorderPoint'];
+        const numericFields = ['reorderPoint', 'safetyStock'];
+        const decimalFields = ['stock', 'weight'];
         const stringNumericFields = ['price', 'costPrice'];
 
         if (name.startsWith('custom_')) {
@@ -77,6 +89,8 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
         } else {
             if (numericFields.includes(name)) {
                 setProduct(prev => ({ ...prev, [name]: value === '' ? 0 : parseInt(value) }));
+            } else if (decimalFields.includes(name)) {
+                setProduct(prev => ({ ...prev, [name]: value === '' ? 0 : parseFloat(value) }));
             } else if (stringNumericFields.includes(name)) {
                 setProduct(prev => ({ ...prev, [name]: value }));
             } else if (name === 'categoryId' || name === 'supplierId') {
@@ -112,6 +126,22 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
         setProduct(prev => ({ ...prev, barcode: prev.sku }));
     };
 
+    // Add these functions to handle file operations
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        setImageFiles(prev => [...prev, ...files]);
+    };
+
+    const removeSelectedFile = (index: number) => {
+        setImageFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const markImageForDeletion = (imageUrl: string) => {
+        setImagesToDelete(prev => [...prev, imageUrl]);
+        setImages(prev => prev.filter(url => url !== imageUrl));
+    };
+
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (isSaving) return;
@@ -124,36 +154,110 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
         setError('');
         setIsSaving(true);
 
-        const finalImageUrls = [...images];
-        if (finalImageUrls.length === 0) {
-            finalImageUrls.push(`https://picsum.photos/seed/${encodeURIComponent(product.name)}/200`);
-        }
-
-        // Prepare the product payload with proper type conversions
-        const productPayload = {
-            ...product,
-            categoryId: product.categoryId || null,
-            supplierId: product.supplierId || null,
-            costPrice: product.costPrice ? parseFloat(product.costPrice.toString()) : null,
-            price: parseFloat(product.price.toString()),
-            stock: parseInt(product.stock.toString()),
-            reorderPoint: product.reorderPoint ? parseInt(product.reorderPoint.toString()) : null,
-            imageUrls: finalImageUrls,
-            ...(productToEdit && { id: productToEdit.id })
-        };
-
-        // Convert camelCase to snake_case for API
-        const apiPayload = toSnakeCase(productPayload);
-
         try {
-            await onSave(apiPayload);
-        } catch (err) {
-            setError("There was an error saving the product. Please try again.");
-            console.error("Save failed in modal", err);
+            console.log('Submitting product:', product);
+            console.log('Image files:', imageFiles);
+            console.log('Images to delete:', imagesToDelete);
+            console.log('Current images:', images);
+
+            // Create FormData for file upload
+            const formData = new FormData();
+
+            // Add product data - convert camelCase to snake_case for backend
+            formData.append('name', product.name);
+            formData.append('description', product.description);
+            formData.append('sku', product.sku);
+            formData.append('barcode', product.barcode || '');
+            formData.append('category_id', product.categoryId || '');
+            formData.append('supplier_id', product.supplierId || '');
+            formData.append('price', product.price.toString());
+            formData.append('cost_price', product.costPrice?.toString() || '');
+            formData.append('stock', product.stock.toString());
+            formData.append('unit_of_measure', (product.unitOfMeasure || 'unit'));
+            formData.append('brand', product.brand || '');
+            formData.append('status', product.status);
+            formData.append('reorder_point', product.reorderPoint?.toString() || '');
+            formData.append('safety_stock', product.safetyStock?.toString() || '');
+            formData.append('weight', product.weight?.toString() || '');
+            formData.append('dimensions', product.dimensions || '');
+            formData.append('variants', JSON.stringify(product.variants || []));
+            formData.append('custom_attributes', JSON.stringify(product.customAttributes || {}));
+
+            // Process existing images - separate data URLs from server images
+            const dataUrlImages = images.filter(url => url.startsWith('data:'));
+            const serverImages = images.filter(url => !url.startsWith('data:'));
+
+            // Add existing server images (those we want to keep)
+            const imagesToKeep = productToEdit
+                ? productToEdit.imageUrls.filter(url => 
+                    !imagesToDelete.includes(url) && !url.startsWith('data:'))
+                : [];
+            formData.append('existing_images', JSON.stringify(imagesToKeep));
+
+            // Add images to delete
+            if (imagesToDelete.length > 0) {
+                formData.append('images_to_delete', JSON.stringify(imagesToDelete));
+            }
+
+            // Convert data URLs to File objects and add them
+            for (let i = 0; i < dataUrlImages.length; i++) {
+                const dataUrl = dataUrlImages[i];
+                const byteString = atob(dataUrl.split(',')[1]);
+                const mimeString = dataUrl.split(',')[0].split(':')[1].split(';')[0];
+                const ab = new ArrayBuffer(byteString.length);
+                const ia = new Uint8Array(ab);
+
+                for (let j = 0; j < byteString.length; j++) {
+                    ia[j] = byteString.charCodeAt(j);
+                }
+
+                const blob = new Blob([ab], { type: mimeString });
+                const fileName = `data-url-image-${Date.now()}-${i}.${mimeString.split('/')[1]}`;
+                const file = new File([blob], fileName, { type: mimeString });
+
+                formData.append('images', file);
+            }
+
+            // Add new image files
+            imageFiles.forEach(file => {
+                formData.append('images', file);
+            });
+
+            // Log FormData contents for debugging
+            console.log('FormData contents:');
+            for (let pair of formData.entries()) {
+                console.log(pair[0] + ': ' + pair[1]);
+            }
+
+            // Use the appropriate API method
+            let result;
+            if (productToEdit) {
+                result = await api.putFormData<Product>(`/products/${productToEdit.id}`, formData);
+            } else {
+                result = await api.postFormData<Product>('/products', formData);
+            }
+
+            console.log('Save result:', result);
+            if ((result as any)?.offline) {
+                // When offline, propagate the original product data so the app can optimistically update UI
+                const payload = productToEdit ? ({ ...productToEdit, ...product } as Product) : product;
+                await onSave(payload);
+            } else {
+                await onSave(result as Product);
+            }
+
+            // Reset form state
+            setImageFiles([]);
+            setImagesToDelete([]);
+
+        } catch (error: any) {
+            console.error('Save failed in modal', error);
+            setError(error.message || 'Failed to save product');
         } finally {
             setIsSaving(false);
         }
     };
+
 
     const relevantAttributes = useMemo(() => {
         if (!product.categoryId) return [];
@@ -180,7 +284,12 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
     const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
         if (files) {
-            Array.from(files).forEach(file => {
+            // Store the actual File objects
+            const newFiles = Array.from(files);
+            setImageFiles(prev => [...prev, ...newFiles]);
+
+            // Create preview URLs for display
+            newFiles.forEach(file => {
                 const reader = new FileReader();
                 reader.onloadend = () => {
                     if (typeof reader.result === 'string') {
@@ -193,13 +302,47 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
     };
 
     const removeImage = (indexToRemove: number) => {
+        // Remove from preview images
         setImages(prev => prev.filter((_, index) => index !== indexToRemove));
+
+        // If it's a newly added image (has a corresponding File object)
+        if (indexToRemove < imageFiles.length) {
+            setImageFiles(prev => prev.filter((_, index) => index !== indexToRemove));
+        } 
+        // If it's an existing image from the server (for product edit)
+        else if (productToEdit && productToEdit.imageUrls) {
+            const imageToRemove = productToEdit.imageUrls[indexToRemove - imageFiles.length];
+            if (imageToRemove) {
+                setImagesToDelete(prev => [...prev, imageToRemove]);
+            }
+        }
     };
 
     const handleCameraCapture = (imageDataUrl: string) => {
+        // Add to preview images
         setImages(prev => [...prev, imageDataUrl]);
+
+        // Convert data URL to File object
+        const byteString = atob(imageDataUrl.split(',')[1]);
+        const mimeString = imageDataUrl.split(',')[0].split(':')[1].split(';')[0];
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+
+        for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
+        }
+
+        const blob = new Blob([ab], { type: mimeString });
+        const fileName = `camera-capture-${Date.now()}.${mimeString.split('/')[1]}`;
+        const file = new File([blob], fileName, { type: mimeString });
+
+        // Add to image files
+        setImageFiles(prev => [...prev, file]);
+
         setIsCameraModalOpen(false);
     };
+
+
 
     if (!isOpen) return null;
 
@@ -288,8 +431,11 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
                             {renderSectionTitle('Pricing')}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
-                                    <label htmlFor="price" className="block text-sm font-medium text-gray-700">Retail Price *</label>
+                                    <label htmlFor="price" className="block text-sm font-medium text-gray-700">Retail Price {product.unitOfMeasure === 'kg' ? '(per kg)' : ''} *</label>
                                     <input type="number" name="price" id="price" value={product.price} onChange={handleChange} required min="0.01" step="0.01" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"/>
+                                    {product.unitOfMeasure === 'kg' && (
+                                        <p className="mt-1 text-xs text-gray-500">Enter the price for each kilogram (kg). The POS will multiply by the weight sold.</p>
+                                    )}
                                 </div>
                                 <div>
                                     <label htmlFor="costPrice" className="block text-sm font-medium text-gray-700">Cost Price</label>
@@ -315,13 +461,123 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
                                 <div>
-                                    <label htmlFor="stock" className="block text-sm font-medium text-gray-700">Stock Quantity *</label>
-                                    <input type="number" name="stock" id="stock" value={product.stock} onChange={handleChange} required min="0" step="1" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"/>
+                                    <label htmlFor="stock" className="block text-sm font-medium text-gray-700">Stock Quantity{product.unitOfMeasure === 'kg' ? ' (kg)' : ''} *</label>
+                                    <input type="number" name="stock" id="stock" value={product.stock} onChange={handleChange} required min="0" step={product.unitOfMeasure === 'kg' ? "0.001" : "1"} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"/>
+                                </div>
+                                <div>
+                                    <label htmlFor="unitOfMeasure" className="block text-sm font-medium text-gray-700">Unit of Measure</label>
+                                    <select name="unitOfMeasure" id="unitOfMeasure" value={product.unitOfMeasure || 'unit'} onChange={handleChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                        <option value="unit">Unit</option>
+                                        <option value="kg">Kilogram (kg)</option>
+                                    </select>
                                 </div>
                                 <div>
                                     <label htmlFor="reorderPoint" className="block text-sm font-medium text-gray-700">Reorder Point</label>
                                     <input type="number" name="reorderPoint" id="reorderPoint" value={product.reorderPoint || ''} onChange={handleChange} min="0" step="1" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder={`Default: ${storeSettings.lowStockThreshold}`}/>
                                 </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+                                <div>
+                                    <label htmlFor="safetyStock" className="block text-sm font-medium text-gray-700">Safety Stock Level</label>
+                                    <input type="number" name="safetyStock" id="safetyStock" value={product.safetyStock || ''} onChange={handleChange} min="0" step="1" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" />
+                                </div>
+                                <div>
+                                    <label htmlFor="weight" className="block text-sm font-medium text-gray-700">Weight (kg)</label>
+                                    <input type="number" name="weight" id="weight" value={product.weight || ''} onChange={handleChange} min="0" step="0.001" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" />
+                                </div>
+                                <div>
+                                    <label htmlFor="dimensions" className="block text-sm font-medium text-gray-700">Dimensions</label>
+                                    <input type="text" name="dimensions" id="dimensions" value={product.dimensions || ''} onChange={handleChange} placeholder="e.g., 10 x 20 x 5 cm" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" />
+                                </div>
+                            </div>
+
+                            {renderSectionTitle('Variants')}
+                            <div className="space-y-2">
+                                <p className="text-xs text-gray-500">Add product variants (e.g., sizes or colors). Each variant should have a unique SKU, price, and stock.</p>
+                                {(product.variants || []).map((v, idx) => (
+                                    <div key={idx} className="grid grid-cols-1 sm:grid-cols-6 gap-2 items-end">
+                                        <div className="sm:col-span-2">
+                                            <label className="block text-sm font-medium text-gray-700">Name/Label</label>
+                                            <input
+                                                type="text"
+                                                value={v.name || ''}
+                                                onChange={(e) => setProduct(prev => ({
+                                                    ...prev,
+                                                    variants: prev.variants?.map((vv, i) => i === idx ? { ...vv, name: e.target.value } : vv) || []
+                                                }))}
+                                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700">SKU</label>
+                                            <input
+                                                type="text"
+                                                value={v.sku}
+                                                onChange={(e) => setProduct(prev => ({
+                                                    ...prev,
+                                                    variants: prev.variants?.map((vv, i) => i === idx ? { ...vv, sku: e.target.value } : vv) || []
+                                                }))}
+                                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700">Price</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={v.price}
+                                                onChange={(e) => setProduct(prev => ({
+                                                    ...prev,
+                                                    variants: prev.variants?.map((vv, i) => i === idx ? { ...vv, price: parseFloat(e.target.value || '0') } : vv) || []
+                                                }))}
+                                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700">Stock</label>
+                                            <input
+                                                type="number"
+                                                step={v.unitOfMeasure === 'kg' ? '0.001' : '1'}
+                                                min="0"
+                                                value={v.stock}
+                                                onChange={(e) => setProduct(prev => ({
+                                                    ...prev,
+                                                    variants: prev.variants?.map((vv, i) => i === idx ? { ...vv, stock: parseFloat(e.target.value || '0') } : vv) || []
+                                                }))}
+                                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700">UoM</label>
+                                            <select
+                                                value={v.unitOfMeasure || 'unit'}
+                                                onChange={(e) => setProduct(prev => ({
+                                                    ...prev,
+                                                    variants: prev.variants?.map((vv, i) => i === idx ? { ...vv, unitOfMeasure: e.target.value as any } : vv) || []
+                                                }))}
+                                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                            >
+                                                <option value="unit">Unit</option>
+                                                <option value="kg">kg</option>
+                                            </select>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button type="button" onClick={() => setProduct(prev => ({...prev, variants: (prev.variants || []).filter((_, i) => i !== idx)}))} className="px-3 py-2 rounded-md border text-sm bg-white">Remove</button>
+                                        </div>
+                                    </div>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={() => setProduct(prev => ({
+                                        ...prev,
+                                        variants: [...(prev.variants || []), { name: '', sku: `${product.sku}-${(prev.variants?.length || 0)+1}`, price: product.price, stock: 0, unitOfMeasure: product.unitOfMeasure }]
+                                    }))}
+                                    className="mt-2 inline-flex items-center px-3 py-1.5 rounded-md border text-sm bg-white"
+                                >
+                                    Add Variant
+                                </button>
                             </div>
 
 

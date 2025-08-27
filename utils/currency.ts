@@ -10,8 +10,18 @@ export const formatCurrency = (amount: number | string | undefined, settings: St
             : `0.00${settings.currency.symbol}`;
     }
 
-    const formatted = numericAmount.toFixed(2);
-    return settings.currency.position === 'before'
-        ? `${settings.currency.symbol}${formatted}`
-        : `${formatted}${settings.currency.symbol}`;
+    const isNegative = numericAmount < 0;
+    const absAmount = Math.abs(numericAmount);
+
+    const numberPart = new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+        useGrouping: true,
+    }).format(absAmount);
+
+    const combined = settings.currency.position === 'before'
+        ? `${settings.currency.symbol}${numberPart}`
+        : `${numberPart}${settings.currency.symbol}`;
+
+    return isNegative ? `-${combined}` : combined;
 };

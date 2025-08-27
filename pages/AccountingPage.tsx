@@ -7,62 +7,25 @@ import PlusIcon from '../components/icons/PlusIcon';
 import PencilIcon from '../components/icons/PencilIcon';
 import TrashIcon from '../components/icons/TrashIcon';
 import XMarkIcon from '../components/icons/XMarkIcon';
-import CurrencyDollarIcon from '../components/icons/CurrencyDollarIcon';
-import TrendingUpIcon from '../components/icons/TrendingUpIcon';
 import PrinterIcon from '../components/icons/PrinterIcon';
 import RecordSupplierPaymentModal from '../components/accounting/RecordSupplierPaymentModal';
 import SupplierInvoiceFormModal from '../components/accounting/SupplierInvoiceFormModal';
 import SupplierInvoiceDetailModal from '../components/accounting/SupplierInvoiceDetailModal';
 import SalesInvoiceDetailModal from '../components/accounting/SalesInvoiceDetailModal';
 
-// --- Sub-components for AccountingPage ---
-
-const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; color: string; }> = ({ title, value, icon, color }) => (
-    <div className="relative overflow-hidden rounded-lg bg-white p-5 shadow">
-        <div className={`absolute top-0 right-0 -mt-4 -mr-4 h-20 w-20 rounded-full ${color} opacity-20`}></div>
-        <div className="flex items-center">
-            <div className={`flex-shrink-0 rounded-md p-3 ${color} bg-opacity-10`}>
-                {icon}
-            </div>
-            <div className="ml-5 w-0 flex-1">
-                <dl>
-                    <dt className="truncate text-sm font-medium text-gray-500">{title}</dt>
-                    <dd>
-                        <div className="text-2xl font-bold text-gray-900 break-words">{value}</div>
-                    </dd>
-                </dl>
-            </div>
-        </div>
-    </div>
-);
+// --- Subcomponents for AccountingPage ---
 
 const AccountingDashboard: React.FC<{ accounts: Account[], journalEntries: JournalEntry[], storeSettings: StoreSettings }> = ({ accounts, journalEntries, storeSettings }) => {
-    const { totalAssets, totalLiabilities, totalEquity, totalRevenue, totalExpenses } = useMemo(() => {
-        return accounts.reduce((acc, account) => {
-            if (account.type === 'asset') acc.totalAssets += account.balance;
-            if (account.type === 'liability') acc.totalLiabilities += account.balance;
-            if (account.type === 'equity') acc.totalEquity += account.balance;
-            if (account.type === 'revenue') acc.totalRevenue += account.balance;
-            if (account.type === 'expense') acc.totalExpenses += account.balance;
-            return acc;
-        }, { totalAssets: 0, totalLiabilities: 0, totalEquity: 0, totalRevenue: 0, totalExpenses: 0 });
-    }, [accounts]);
 
-    const netIncome = totalRevenue - totalExpenses;
 
     const recentTransactions = useMemo(() => {
-        return journalEntries.slice(0, 5);
+        return [...journalEntries]
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 5);
     }, [journalEntries]);
 
     return (
         <div className="space-y-8">
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                <StatCard title="Total Assets" value={formatCurrency(totalAssets, storeSettings)} icon={<CurrencyDollarIcon className="h-6 w-6 text-blue-600"/>} color="bg-blue-100" />
-                <StatCard title="Total Liabilities" value={formatCurrency(totalLiabilities, storeSettings)} icon={<CurrencyDollarIcon className="h-6 w-6 text-yellow-600"/>} color="bg-yellow-100" />
-                <StatCard title="Total Equity" value={formatCurrency(totalEquity, storeSettings)} icon={<CurrencyDollarIcon className="h-6 w-6 text-purple-600"/>} color="bg-purple-100" />
-                <StatCard title="Total Revenue" value={formatCurrency(totalRevenue, storeSettings)} icon={<TrendingUpIcon className="h-6 w-6 text-green-600"/>} color="bg-green-100" />
-                <StatCard title="Net Income" value={formatCurrency(netIncome, storeSettings)} icon={<TrendingUpIcon className={`h-6 w-6 ${netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}/>} color={`${netIncome >= 0 ? 'bg-green-100' : 'bg-red-100'}`} />
-            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 bg-white shadow rounded-lg">
@@ -150,7 +113,7 @@ const AccountFormModal: React.FC<{
                              <label className="block text-sm font-medium text-gray-700">Account Name</label>
                              <input type="text" value={account.name} onChange={e => setAccount({...account, name: e.target.value})} required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" />
                          </div>
-                         <div className="grid grid-cols-2 gap-4">
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                <label className="block text-sm font-medium text-gray-700">Account Number</label>
                                <input type="text" value={account.number} onChange={e => setAccount({...account, number: e.target.value})} required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" />
@@ -204,7 +167,7 @@ const ChartOfAccountsView: React.FC<{
     const renderAccountList = (type: AccountType) => (
         <div className="mt-4">
             <h4 className="text-md font-semibold text-gray-600 capitalize mb-2">{type}s</h4>
-            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+            <div className="overflow-x-auto shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
                 <table className="min-w-full divide-y divide-gray-200">
                     <tbody className="bg-white divide-y divide-gray-200">
                         {accounts.filter(a => a.type === type).sort((a,b) => a.number.localeCompare(b.number)).map(account => (
@@ -227,7 +190,7 @@ const ChartOfAccountsView: React.FC<{
 
     return (
         <div>
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <h3 className="text-xl font-semibold">Chart of Accounts</h3>
                 <button onClick={handleAdd} className="inline-flex items-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
                     <PlusIcon className="w-5 h-5"/> Add Account
@@ -254,13 +217,13 @@ const JournalView: React.FC<{
 
     return (
         <div>
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
                 <h3 className="text-xl font-semibold">Journal</h3>
                 <button onClick={() => setIsModalOpen(true)} className="inline-flex items-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
                     <PlusIcon className="w-5 h-5"/> Manual Entry
                 </button>
             </div>
-            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+            <div className="overflow-x-auto shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
@@ -361,7 +324,7 @@ const CustomerStatementModal: React.FC<{
                     <h3 className="text-lg font-medium text-gray-900">Customer Statement</h3>
                     <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-500"><XMarkIcon className="h-6 w-6" /></button>
                 </div>
-                <div className="p-6 max-h-[70vh] overflow-y-auto" ref={printRef}>
+                <div className="p-6 max-h-[70vh] overflow-y-auto overflow-x-auto" ref={printRef}>
                     <div className="header mb-6">
                         <h2 className="text-xl font-bold">{customer.name}</h2>
                         <p>{customer.email}</p>
@@ -415,14 +378,15 @@ const RecordPaymentModal: React.FC<{
     const balanceDue = invoice.total - invoice.amountPaid;
     const [amount, setAmount] = useState(balanceDue.toFixed(2));
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-    const [method, setMethod] = useState<'cash' | 'card' | 'other'>('card');
+    const [method, setMethod] = useState<string>(storeSettings?.paymentMethods?.[0]?.id || 'cash');
 
     useEffect(() => {
         if(isOpen) {
             setAmount(balanceDue.toFixed(2));
             setDate(new Date().toISOString().split('T')[0]);
+            setMethod(storeSettings?.paymentMethods?.[0]?.id || 'cash');
         }
-    }, [invoice, balanceDue, isOpen]);
+    }, [invoice, balanceDue, isOpen, storeSettings]);
     
     if (!isOpen) return null;
 
@@ -451,7 +415,7 @@ const RecordPaymentModal: React.FC<{
                          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-500"><XMarkIcon className="h-6 w-6" /></button>
                      </div>
                      <div className="px-6 py-4 space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Payment Amount</label>
                                 <input type="number" value={amount} onChange={e => setAmount(e.target.value)} max={balanceDue} step="0.01" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" />
@@ -463,10 +427,10 @@ const RecordPaymentModal: React.FC<{
                         </div>
                          <div>
                             <label className="block text-sm font-medium text-gray-700">Payment Method</label>
-                             <select value={method} onChange={e => setMethod(e.target.value as any)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
-                                <option value="card">Card</option>
-                                <option value="cash">Cash</option>
-                                <option value="other">Other</option>
+                             <select value={method} onChange={e => setMethod(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                                {storeSettings.paymentMethods?.map(pm => (
+                                    <option key={pm.id} value={pm.id}>{pm.name}</option>
+                                ))}
                             </select>
                          </div>
                      </div>
@@ -493,10 +457,23 @@ const ARManagementView: React.FC<{
     const [selectedCustomerForStatement, setSelectedCustomerForStatement] = useState<Customer | null>(null);
 
     const openInvoices = useMemo(() => {
+        const isPaid = (s: Sale) => {
+            const balanceCents = Math.round((s.total - s.amountPaid) * 100);
+            return s.paymentStatus === 'paid' || balanceCents <= 0;
+        };
         return sales
-            .filter(s => s.paymentStatus !== 'paid')
+            .filter(s => !isPaid(s))
             .sort((a,b) => new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime());
     }, [sales]);
+
+    // Map customers by id for quick lookup of names when invoice.customerName is missing
+    const customersById = useMemo(() => {
+        const map: Record<string, Customer> = {};
+        for (const c of customers) {
+            map[c.id] = c;
+        }
+        return map;
+    }, [customers]);
 
     const handleRecordPaymentClick = (invoice: Sale) => {
         setSelectedInvoice(invoice);
@@ -514,45 +491,49 @@ const ARManagementView: React.FC<{
     return (
         <div className="space-y-8">
             <h3 className="text-xl font-semibold">Open Invoices</h3>
-            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+            <div className="overflow-x-auto shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
                 <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invoice #</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Due Date</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Balance Due</th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                        {openInvoices.map(invoice => {
-                            const isOverdue = invoice.dueDate && new Date(invoice.dueDate) < new Date();
-                            return (
-                            <tr key={invoice.transactionId} onClick={() => onViewInvoice(invoice)} className="hover:bg-gray-50 cursor-pointer">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">{invoice.transactionId}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{invoice.customerName}</td>
-                                <td className={`px-6 py-4 whitespace-nowrap text-sm ${isOverdue ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>{invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'N/A'}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold">{formatCurrency(invoice.total - invoice.amountPaid, storeSettings)}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
-                                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${isOverdue ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                       {isOverdue ? 'Overdue' : (invoice.paymentStatus || 'unpaid').replace('_', ' ').toUpperCase()}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm" onClick={e => e.stopPropagation()}>
-                                    <button onClick={() => handleRecordPaymentClick(invoice)} className="text-blue-600 hover:text-blue-800 font-medium">Record Payment</button>
-                                </td>
-                            </tr>
-                        )})}
-                         {openInvoices.length === 0 && (
-                            <tr>
-                                <td colSpan={6} className="text-center py-10 text-gray-500">
-                                    No open invoices.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
+                    {/*<thead className="bg-gray-50">*/}
+                    {/*    <tr>*/}
+                    {/*        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invoice #</th>*/}
+                    {/*        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>*/}
+                    {/*        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Due Date</th>*/}
+                    {/*        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Balance Due</th>*/}
+                    {/*        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>*/}
+                    {/*        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>*/}
+                    {/*    </tr>*/}
+                    {/*</thead>*/}
+                    {/*<tbody className="bg-white divide-y divide-gray-200">*/}
+                    {/*    {openInvoices.map(invoice => {*/}
+                    {/*        const rawBalance = (invoice.total - invoice.amountPaid);*/}
+                    {/*        const balanceCents = Math.round(rawBalance * 100);*/}
+                    {/*        const balanceDue = Math.max(0, balanceCents) / 100;*/}
+                    {/*        const isPaid = balanceCents <= 0 || invoice.paymentStatus === 'paid';*/}
+                    {/*        const isOverdue = !isPaid && invoice.dueDate && new Date(invoice.dueDate) < new Date();*/}
+                    {/*        return (*/}
+                    {/*        <tr key={invoice.transactionId} onClick={() => onViewInvoice(invoice)} className="hover:bg-gray-50 cursor-pointer">*/}
+                    {/*            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">{invoice.transactionId}</td>*/}
+                    {/*            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{invoice.customerName || (invoice.customerId ? customersById[invoice.customerId]?.name : undefined) || 'Unknown Customer'}</td>*/}
+                    {/*            <td className={`px-6 py-4 whitespace-nowrap text-sm ${isOverdue ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>{invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'N/A'}</td>*/}
+                    {/*            <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold">{formatCurrency(balanceDue, storeSettings)}</td>*/}
+                    {/*            <td className="px-6 py-4 whitespace-nowrap text-center text-sm">*/}
+                    {/*                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${isPaid ? 'bg-green-100 text-green-800' : isOverdue ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>*/}
+                    {/*                   {isPaid ? 'PAID' : isOverdue ? 'Overdue' : (invoice.paymentStatus || 'unpaid').replace('_', ' ').toUpperCase()}*/}
+                    {/*                </span>*/}
+                    {/*            </td>*/}
+                    {/*            <td className="px-6 py-4 whitespace-nowrap text-right text-sm" onClick={e => e.stopPropagation()}>*/}
+                    {/*                <button onClick={() => handleRecordPaymentClick(invoice)} className="text-blue-600 hover:text-blue-800 font-medium">Record Payment</button>*/}
+                    {/*            </td>*/}
+                    {/*        </tr>*/}
+                    {/*    )})}*/}
+                    {/*     {openInvoices.length === 0 && (*/}
+                    {/*        <tr>*/}
+                    {/*            <td colSpan={6} className="text-center py-10 text-gray-500">*/}
+                    {/*                No open invoices.*/}
+                    {/*            </td>*/}
+                    {/*        </tr>*/}
+                    {/*    )}*/}
+                    {/*</tbody>*/}
                 </table>
             </div>
 
@@ -626,13 +607,13 @@ const APManagementView: React.FC<{
 
     return (
         <div className="space-y-8">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <h3 className="text-xl font-semibold">Supplier Invoices</h3>
                 <button onClick={onOpenInvoiceForm} className="inline-flex items-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
                     <PlusIcon className="w-5 h-5"/> Record Invoice
                 </button>
             </div>
-             <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+             <div className="overflow-x-auto shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
@@ -713,9 +694,9 @@ const TaxReportView: React.FC<{ sales: Sale[], storeSettings: StoreSettings }> =
 
     return (
         <div>
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
                 <h3 className="text-xl font-semibold">Sales Tax Report</h3>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-1.5 border rounded-md text-sm" />
                     <span className="text-gray-500">to</span>
                     <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-1.5 border rounded-md text-sm" />
@@ -808,9 +789,9 @@ const FinancialStatementsView: React.FC<{ accounts: Account[], journalEntries: J
 
     const renderPNL = () => (
         <div className="bg-white shadow rounded-lg p-6">
-             <div className="flex justify-between items-center mb-4">
+             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
                 <h3 className="text-xl font-semibold">Profit & Loss Statement</h3>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <input type="date" value={pnlStartDate} onChange={e => setPnlStartDate(e.target.value)} className="p-1.5 border rounded-md text-sm" />
                     <span className="text-gray-500">to</span>
                     <input type="date" value={pnlEndDate} onChange={e => setPnlEndDate(e.target.value)} className="p-1.5 border rounded-md text-sm" />
@@ -944,6 +925,32 @@ const AccountingPage: React.FC<AccountingPageProps> = ({
 }) => {
     const [activeTab, setActiveTab] = useState('dashboard');
     
+    // Define available tabs for validation/hash syncing
+    const availableTabs = useRef<string[]>([
+        'dashboard',
+        'reports',
+        'ar_management',
+        'ap_management',
+        'taxes',
+        'chart_of_accounts',
+        'journal',
+    ]);
+
+    // Initialize active tab from URL hash if present
+    useEffect(() => {
+        const hash = typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '';
+        if (hash && availableTabs.current.includes(hash)) {
+            setActiveTab(hash);
+        }
+    }, []);
+
+    const setActiveTabAndHash = (tabName: string) => {
+        setActiveTab(tabName);
+        if (typeof window !== 'undefined') {
+            window.history.replaceState(null, '', `#${tabName}`);
+        }
+    };
+    
     // --- Modal States ---
     const [isSupplierInvoiceFormOpen, setIsSupplierInvoiceFormOpen] = useState(false);
     const [editingSupplierInvoice, setEditingSupplierInvoice] = useState<SupplierInvoice | null>(null);
@@ -954,16 +961,28 @@ const AccountingPage: React.FC<AccountingPageProps> = ({
     const [isRecordSupplierPaymentOpen, setIsRecordSupplierPaymentOpen] = useState(false);
     const [invoiceToPayAP, setInvoiceToPayAP] = useState<SupplierInvoice | null>(null);
     
-    const TabButton: React.FC<{ tabName: string, label: string }> = ({ tabName, label }) => (
+    // Mobile tab menu state
+    const [isTabMenuOpen, setIsTabMenuOpen] = useState(false);
+
+    const handleSelectTab = (tabName: string) => {
+        setActiveTabAndHash(tabName);
+        setIsTabMenuOpen(false);
+    };
+    
+    const TabButton: React.FC<{ tabName: string, label: string, shortLabel?: string }> = ({ tabName, label, shortLabel }) => (
         <button
-            onClick={() => setActiveTab(tabName)}
-            className={`px-4 py-2 text-sm font-medium rounded-md 
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tabName}
+            onClick={() => setActiveTabAndHash(tabName)}
+            className={`shrink-0 inline-flex items-center gap-2 px-3 py-2.5 text-sm font-medium rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
                 ${activeTab === tabName 
                     ? 'bg-blue-100 text-blue-700' 
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'}`
             }
         >
-            {label}
+            <span className="hidden sm:inline">{label}</span>
+            <span className="sm:hidden inline">{shortLabel ?? label}</span>
         </button>
     );
     
@@ -1005,20 +1024,73 @@ const AccountingPage: React.FC<AccountingPageProps> = ({
         }
     };
 
+    const currentTitle = useMemo(() => {
+        switch (activeTab) {
+            case 'dashboard':
+                return 'Dashboard';
+            case 'reports':
+                return 'Reports';
+            case 'ar_management':
+                return 'Accounts Receivable';
+            case 'ap_management':
+                return 'Accounts Payable';
+            case 'taxes':
+                return 'Taxes';
+            case 'chart_of_accounts':
+                return 'Chart of Accounts';
+            case 'journal':
+                return 'Journal';
+            default:
+                return 'Accounting';
+        }
+    }, [activeTab]);
+
     return (
         <div className="flex flex-col h-full bg-gray-50">
-            <Header title="Accounting" />
+            <Header title={currentTitle} rightContent={(
+                            <button
+                                type="button"
+                                className="sm:hidden inline-flex items-center gap-2 px-3 py-2.5 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-100 border"
+                                aria-haspopup="menu"
+                                aria-expanded={isTabMenuOpen}
+                                aria-controls="accounting-tab-menu"
+                                onClick={() => setIsTabMenuOpen(o => !o)}
+                            >
+                                Menu
+                            </button>
+                        )} />
             <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-                 <div className="border-b border-gray-200 mb-6">
-                    <nav className="flex space-x-2 flex-wrap" aria-label="Tabs">
-                        <TabButton tabName="dashboard" label="Dashboard" />
-                        <TabButton tabName="reports" label="Reports" />
-                        <TabButton tabName="ar_management" label="Accounts Receivable" />
-                        <TabButton tabName="ap_management" label="Accounts Payable" />
-                        <TabButton tabName="taxes" label="Taxes" />
-                        <TabButton tabName="chart_of_accounts" label="Chart of Accounts" />
-                        <TabButton tabName="journal" label="Journal" />
-                    </nav>
+                 <div className="border-b border-gray-200 mb-6 sticky top-0 z-20 bg-gray-50">
+                    <div className="relative">
+                        <nav className="hidden sm:flex -mx-4 px-4 items-center gap-2 overflow-x-auto whitespace-nowrap no-scrollbar" aria-label="Tabs" role="tablist">
+                            <TabButton tabName="dashboard" label="Dashboard" shortLabel="Home" />
+                            <TabButton tabName="reports" label="Reports" shortLabel="Reports" />
+                            <TabButton tabName="ar_management" label="Accounts Receivable" shortLabel="A/R" />
+                            <TabButton tabName="ap_management" label="Accounts Payable" shortLabel="A/P" />
+                            <TabButton tabName="taxes" label="Taxes" shortLabel="Taxes" />
+                            <TabButton tabName="chart_of_accounts" label="Chart of Accounts" shortLabel="Accounts" />
+                            <TabButton tabName="journal" label="Journal" shortLabel="Journal" />
+                        </nav>
+
+                        {/* Mobile dropdown panel */}
+                        {isTabMenuOpen && (
+                            <>
+                                {/* Backdrop to close menu on outside click */}
+                                <div className="fixed inset-0 z-10 bg-black/30 sm:hidden" onClick={() => setIsTabMenuOpen(false)}></div>
+                                <div id="accounting-tab-menu" role="menu" aria-label="Accounting Tabs" className="sm:hidden absolute left-0 right-0 mt-2 z-20 mx-4">
+                                    <div className="bg-white rounded-lg shadow ring-1 ring-black ring-opacity-5 divide-y">
+                                        <button className={`w-full text-left px-4 py-3 text-sm ${activeTab === 'dashboard' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`} onClick={() => handleSelectTab('dashboard')} role="menuitem">Dashboard</button>
+                                        <button className={`w-full text-left px-4 py-3 text-sm ${activeTab === 'reports' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`} onClick={() => handleSelectTab('reports')} role="menuitem">Reports</button>
+                                        <button className={`w-full text-left px-4 py-3 text-sm ${activeTab === 'ar_management' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`} onClick={() => handleSelectTab('ar_management')} role="menuitem">Accounts Receivable</button>
+                                        <button className={`w-full text-left px-4 py-3 text-sm ${activeTab === 'ap_management' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`} onClick={() => handleSelectTab('ap_management')} role="menuitem">Accounts Payable</button>
+                                        <button className={`w-full text-left px-4 py-3 text-sm ${activeTab === 'taxes' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`} onClick={() => handleSelectTab('taxes')} role="menuitem">Taxes</button>
+                                        <button className={`w-full text-left px-4 py-3 text-sm ${activeTab === 'chart_of_accounts' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`} onClick={() => handleSelectTab('chart_of_accounts')} role="menuitem">Chart of Accounts</button>
+                                        <button className={`w-full text-left px-4 py-3 text-sm ${activeTab === 'journal' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`} onClick={() => handleSelectTab('journal')} role="menuitem">Journal</button>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
                 </div>
                 <div className="animate-fade-in">
                     {renderContent()}
@@ -1064,6 +1136,7 @@ const AccountingPage: React.FC<AccountingPageProps> = ({
                         setViewingARInvoice(null);
                     }}
                     storeSettings={storeSettings}
+                    customerName={viewingARInvoice.customerName || (viewingARInvoice.customerId ? (customers.find(c => c.id === viewingARInvoice.customerId)?.name) : undefined) || undefined}
                  />
             )}
         </div>

@@ -45,6 +45,7 @@ const InventoryPage: React.FC<InventoryPageProps> = ({
     const [showArchived, setShowArchived] = useState(false);
     const [isStockModalOpen, setIsStockModalOpen] = useState(false);
     const [stockAdjustProduct, setStockAdjustProduct] = useState<Product | null>(null);
+    const [stockAdjustInitialReason, setStockAdjustInitialReason] = useState<string | undefined>(undefined);
     const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
     const [productToPrint, setProductToPrint] = useState<Product | null>(null);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -69,7 +70,28 @@ const InventoryPage: React.FC<InventoryPageProps> = ({
                     const product = await api.get<Product>(`/products/${selectedProductId}`);
                     setDetailedProduct(product);
                 } catch (err: any) {
-                    setDetailError(err.message);
+                    // Fallback to local state first
+                    const local = products.find(p => p.id === selectedProductId) || null;
+                    if (local) {
+                        setDetailedProduct(local);
+                        setDetailError(null);
+                    } else {
+                        // Lazy-load from IndexedDB as a deeper fallback
+                        try {
+                            const { dbService } = await import('../services/dbService');
+                            const cached = await dbService.get<Product>('products', selectedProductId);
+                            if (cached) {
+                                setDetailedProduct(cached);
+                                setDetailError(null);
+                            } else {
+                                setDetailedProduct(null);
+                                setDetailError(err.message || 'Product details unavailable offline');
+                            }
+                        } catch (e: any) {
+                            setDetailedProduct(null);
+                            setDetailError(err.message || e?.message || 'Product details unavailable offline');
+                        }
+                    }
                 } finally {
                     setDetailIsLoading(false);
                 }
@@ -78,7 +100,7 @@ const InventoryPage: React.FC<InventoryPageProps> = ({
         } else {
             setDetailedProduct(null);
         }
-    }, [selectedProductId]);
+    }, [selectedProductId, products]);
 
 
     const handleOpenAddModal = () => {
@@ -98,31 +120,54 @@ const InventoryPage: React.FC<InventoryPageProps> = ({
 
     const handleSave = async (productData: Product | Omit<Product, 'id'>) => {
         try {
+            // onSaveProduct now handles state updates, so we just need to call it
+            // and close the modal on success.
             const savedProduct = await onSaveProduct(productData);
+            handleCloseModal();
+
+            // Ensure the newly added/updated product is visible in the list by clearing any active search filter
+            setSearchTerm('');
+            // And jump to the first page so the newest items (usually at the top) are visible
+            setPage(1);
+
+            // If user was on a detail page for the product that was just edited,
+            // update that specific product's state to ensure the view is fresh.
             if (detailedProduct && detailedProduct.id === savedProduct.id) {
                 setDetailedProduct(savedProduct);
             }
-            handleCloseModal();
         } catch (error) {
-            // Error snackbar is shown by App.tsx. We just need to keep the modal open.
+            // Error is handled by onSaveProduct, which shows a snackbar.
+            // We catch it here to prevent the modal from closing on failure.
             console.error("Failed to save product:", error);
         }
     };
 
-    const handleOpenStockModal = (product: Product) => {
+    const handleOpenStockModal = (product: Product, initialReason?: string) => {
         setStockAdjustProduct(product);
+        setStockAdjustInitialReason(initialReason);
         setIsStockModalOpen(true);
     };
 
     const handleCloseStockModal = () => {
         setIsStockModalOpen(false);
         setStockAdjustProduct(null);
+        setStockAdjustInitialReason(undefined);
     };
 
     const handleSaveStockAdjustment = (productId: string, newQuantity: number, reason: string) => {
         onAdjustStock(productId, newQuantity, reason);
         if (detailedProduct && detailedProduct.id === productId) {
-            setDetailedProduct(prev => prev ? {...prev, stock: newQuantity} : null);
+            setDetailedProduct(prev => {
+                if (!prev) return null;
+                let nextStock = prev.stock;
+                if (reason === 'Stock Count') {
+                    nextStock = newQuantity;
+                } else {
+                    // Treat as signed delta for non Stock Count reasons
+                    nextStock = Math.max(0, prev.stock + newQuantity);
+                }
+                return { ...prev, stock: nextStock };
+            });
         }
         handleCloseStockModal();
     };
@@ -185,6 +230,59 @@ const InventoryPage: React.FC<InventoryPageProps> = ({
         );
     });
 
+    // --- Sorting ---
+    type SortBy = 'name' | 'price' | 'stock' | 'category' | 'sku';
+    type SortOrder = 'asc' | 'desc';
+    const [sortBy, setSortBy] = useState<SortBy>('name');
+    const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+
+    const sortedProducts = useMemo(() => {
+        const arr = [...filteredProducts];
+        const getCategoryName = (p: Product) => (p.categoryId ? (categoryMap.get(p.categoryId)?.name || '') : '');
+        arr.sort((a, b) => {
+            let cmp = 0;
+            switch (sortBy) {
+                case 'price':
+                    cmp = (a.price || 0) - (b.price || 0);
+                    break;
+                case 'stock':
+                    cmp = (Number(a.stock) || 0) - (Number(b.stock) || 0);
+                    break;
+                case 'category':
+                    cmp = getCategoryName(a).localeCompare(getCategoryName(b));
+                    break;
+                case 'sku':
+                    cmp = (a.sku || '').localeCompare(b.sku || '');
+                    break;
+                case 'name':
+                default:
+                    cmp = (a.name || '').localeCompare(b.name || '');
+            }
+            return sortOrder === 'asc' ? cmp : -cmp;
+        });
+        return arr;
+    }, [filteredProducts, sortBy, sortOrder, categoryMap]);
+
+    // --- Pagination ---
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(12);
+    const totalPages = Math.max(1, Math.ceil(sortedProducts.length / pageSize));
+
+    const paginatedProducts = useMemo(() => {
+        const start = (page - 1) * pageSize;
+        return sortedProducts.slice(start, start + pageSize);
+    }, [sortedProducts, page, pageSize]);
+
+    useEffect(() => {
+        // Reset to first page when filters/sorting change
+        setPage(1);
+    }, [searchTerm, showArchived, sortBy, sortOrder]);
+
+    useEffect(() => {
+        // Clamp current page if total pages shrink
+        if (page > totalPages) setPage(totalPages);
+    }, [totalPages, page]);
+
     const selectedProductCategory = useMemo(() => {
         if (!detailedProduct || !detailedProduct.categoryId) return undefined;
         return categories.find(c => c.id === detailedProduct.categoryId);
@@ -233,7 +331,7 @@ const InventoryPage: React.FC<InventoryPageProps> = ({
         return (
             <>
                 <div className="flex flex-col h-full bg-gray-100">
-                    <header className="bg-white shadow-sm z-10">
+                    <header className="bg-gray-100 shadow-sm z-10">
                         <div className="mx-auto px-4 sm:px-6 lg:px-8">
                             <div className="flex items-center h-16">
                                 <button
@@ -265,6 +363,7 @@ const InventoryPage: React.FC<InventoryPageProps> = ({
                                 onArchive={onArchiveProduct}
                                 onPrintLabel={handleOpenPrintModal}
                                 onAdjustStock={handleOpenStockModal}
+                                onPersonalUse={(p) => handleOpenStockModal(p, 'Personal Use')}
                             />
                         )}
                     </main>
@@ -286,6 +385,7 @@ const InventoryPage: React.FC<InventoryPageProps> = ({
                         onClose={handleCloseStockModal}
                         onSave={handleSaveStockAdjustment}
                         product={stockAdjustProduct}
+                        initialReason={stockAdjustInitialReason}
                     />
                 )}
                 <LabelPrintModal
@@ -321,8 +421,40 @@ const InventoryPage: React.FC<InventoryPageProps> = ({
                 setShowArchived={setShowArchived}
             />
             <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100">
+                {/* Sorting controls */}
+                <div className="px-4 pt-4">
+                    <div className="bg-white rounded-md border p-3 flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-2">
+                            <label htmlFor="sortBy" className="text-sm text-gray-700">Sort by</label>
+                            <select
+                                id="sortBy"
+                                className="border rounded px-2 py-1 text-sm"
+                                value={sortBy}
+                                onChange={(e) => setSortBy(e.target.value as any)}
+                            >
+                                <option value="name">Name</option>
+                                <option value="sku">SKU</option>
+                                <option value="price">Price</option>
+                                <option value="stock">Stock</option>
+                                <option value="category">Category</option>
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label htmlFor="sortOrder" className="text-sm text-gray-700">Order</label>
+                            <select
+                                id="sortOrder"
+                                className="border rounded px-2 py-1 text-sm"
+                                value={sortOrder}
+                                onChange={(e) => setSortOrder(e.target.value as any)}
+                            >
+                                <option value="asc">Ascending</option>
+                                <option value="desc">Descending</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
                 <ProductList
-                    products={filteredProducts}
+                    products={paginatedProducts}
                     categories={categories}
                     onSelectProduct={handleSelectProduct}
                     onStockChange={onStockChange}
@@ -332,6 +464,62 @@ const InventoryPage: React.FC<InventoryPageProps> = ({
                     storeSettings={storeSettings}
                     userRole={currentUser.role}
                 />
+                {/* Pagination controls */}
+                <div className="px-4 pb-6">
+                    <div className="bg-white rounded-md border p-3 flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-sm text-gray-700">
+                            Showing {(sortedProducts.length === 0 ? 0 : (page - 1) * pageSize + 1)}–{Math.min(sortedProducts.length, page * pageSize)} of {sortedProducts.length}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label htmlFor="pageSize" className="text-sm text-gray-700">Per page</label>
+                            <select
+                                id="pageSize"
+                                className="border rounded px-2 py-1 text-sm"
+                                value={pageSize}
+                                onChange={(e) => { setPageSize(parseInt(e.target.value, 10)); setPage(1); }}
+                            >
+                                <option value={12}>12</option>
+                                <option value={24}>24</option>
+                                <option value={48}>48</option>
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                className="px-3 py-1 text-sm border rounded disabled:opacity-50"
+                                onClick={() => setPage(1)}
+                                disabled={page <= 1}
+                                aria-label="First page"
+                            >
+                                « First
+                            </button>
+                            <button
+                                className="px-3 py-1 text-sm border rounded disabled:opacity-50"
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page <= 1}
+                                aria-label="Previous page"
+                            >
+                                ‹ Prev
+                            </button>
+                            <span className="text-sm text-gray-700">Page {page} of {totalPages}</span>
+                            <button
+                                className="px-3 py-1 text-sm border rounded disabled:opacity-50"
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page >= totalPages}
+                                aria-label="Next page"
+                            >
+                                Next ›
+                            </button>
+                            <button
+                                className="px-3 py-1 text-sm border rounded disabled:opacity-50"
+                                onClick={() => setPage(totalPages)}
+                                disabled={page >= totalPages}
+                                aria-label="Last page"
+                            >
+                                Last »
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </main>
             {canManageProducts && isModalOpen && (
                 <ProductFormModal
@@ -350,6 +538,7 @@ const InventoryPage: React.FC<InventoryPageProps> = ({
                     onClose={handleCloseStockModal}
                     onSave={handleSaveStockAdjustment}
                     product={stockAdjustProduct}
+                    initialReason={stockAdjustInitialReason}
                 />
             )}
             <LabelPrintModal

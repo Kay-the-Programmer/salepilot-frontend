@@ -11,6 +11,7 @@ interface HeaderProps {
     showArchivedToggle?: boolean;
     showArchived?: boolean;
     setShowArchived?: (show: boolean) => void;
+    rightContent?: React.ReactNode;
 }
 
 const Header: React.FC<HeaderProps> = ({ 
@@ -21,20 +22,21 @@ const Header: React.FC<HeaderProps> = ({
     setSearchTerm, 
     showArchivedToggle = false,
     showArchived,
-    setShowArchived
+    setShowArchived,
+    rightContent
 }) => {
     return (
-        <header className="bg-white shadow-sm z-10">
+        <header className="bg-gray-100 shadow-sm z-10">
             <div className="mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="flex items-center justify-between h-16">
+                <div className={`${rightContent ? 'flex items-center justify-between' : 'flex flex-col md:flex-row md:items-center md:justify-between'} gap-3 md:gap-4 py-3`}>
                     <div className="flex-1 min-w-0">
                         <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate">
                             {title}
                         </h1>
                     </div>
-                    <div className="flex items-center ml-6">
+                    <div className={`${rightContent ? 'flex items-center gap-3 ml-0 md:ml-6' : 'flex items-center flex-wrap gap-3 ml-0 md:ml-6 w-full md:w-auto'}`}>
                         {showArchivedToggle && setShowArchived && (
-                             <div className="flex items-center mr-4">
+                             <div className="flex items-center">
                                 <input
                                     id="show-archived"
                                     name="show-archived"
@@ -49,7 +51,7 @@ const Header: React.FC<HeaderProps> = ({
                             </div>
                         )}
                         {typeof searchTerm !== 'undefined' && setSearchTerm && (
-                            <div className="relative">
+                            <div className="relative flex-1 min-w-0 w-full md:w-64">
                                  <span className="absolute inset-y-0 left-0 flex items-center pl-3">
                                     <svg className="w-5 h-5 text-gray-400" viewBox="0 0 24 24" fill="none">
                                         <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
@@ -68,12 +70,13 @@ const Header: React.FC<HeaderProps> = ({
                             <button
                                 onClick={onButtonClick}
                                 type="button"
-                                className="ml-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                             >
                                 <PlusIcon className="w-5 h-5 mr-2 -ml-1" />
                                 {buttonText}
                             </button>
                         )}
+                        {rightContent}
                     </div>
                 </div>
             </div>

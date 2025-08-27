@@ -44,14 +44,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, user, on
     const navItems = ALL_NAV_ITEMS.filter(item => item.roles.includes(user.role));
 
     return (
-        <aside className={`bg-white border-r border-gray-200 flex flex-col transition-all duration-300 ease-in-out ${isExpanded ? 'w-64' : 'w-20'}`}>
-            <div className="h-16 flex items-center border-b border-gray-200 px-6 overflow-hidden">
+        <aside className={`bg-gray-100 h-full min-h-0 flex flex-col transition-all duration-300 ease-in-out ${isExpanded ? 'w-64' : 'w-20'}`}>
+            <div className="h-16 flex items-center px-6 overflow-hidden">
                 <svg className="w-8 h-8 text-blue-600 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M7 21a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7zM9 5v2h6V5H9zm0 4v2h6V9H9zm0 4v2h6v-2H9z" />
                 </svg>
                 <span className={`ml-3 text-xl font-bold text-gray-800 whitespace-nowrap ${isExpanded ? 'inline' : 'hidden'}`}>SalePilot</span>
             </div>
-            <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto overflow-x-hidden">
+            <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto overflow-x-hidden sidebar-scroll">
                 {navItems.map(item => (
                     <a
                         key={item.name}
@@ -63,7 +63,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, user, on
                         className={`flex items-center px-4 py-2.5 rounded-lg transition-colors duration-200 ${
                             currentPage === item.page
                                 ? 'bg-blue-50 text-blue-600 font-semibold'
-                                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                                : 'text-gray-600 hover:bg-gray-200 hover:text-gray-900'
                         } ${!isExpanded && 'justify-center'}`}
                         title={isExpanded ? undefined : item.name}
                     >
@@ -80,10 +80,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, user, on
                     </a>
                 ))}
             </nav>
-            <div className="px-4 py-4 border-t border-gray-200">
+            <div className="px-4 py-4">
                 <div
                     onClick={() => setCurrentPage('profile')}
-                    className={`p-2 rounded-lg cursor-pointer transition-colors ${currentPage === 'profile' ? 'bg-blue-50' : 'hover:bg-gray-100'}`}
+                    className={`p-2 rounded-lg cursor-pointer transition-colors ${currentPage === 'profile' ? 'bg-blue-50' : 'hover:bg-gray-200'}`}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setCurrentPage('profile'); }}
@@ -103,14 +103,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, user, on
                 <button
                     onClick={onLogout}
                     title={isExpanded ? undefined : 'Logout'}
-                    className={`w-full mt-4 flex items-center px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors ${!isExpanded && 'justify-center'}`}
+                    className={`w-full mt-4 flex items-center px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors ${!isExpanded && 'justify-center'}`}
                 >
                     <div className="flex-shrink-0">
                       <ArrowLeftOnRectangleIcon className="w-5 h-5"/>
                     </div>
                     <span className={`ml-3 whitespace-nowrap ${isExpanded ? 'inline' : 'hidden'}`}>Logout</span>
                 </button>
-                 <div className="mt-4 pt-4 border-t border-gray-200">
+                 <div className="mt-4 pt-4">
                      <div
                         className={`flex items-center justify-center gap-2 text-xs p-2 rounded-md ${isExpanded ? 'justify-start px-3' : 'justify-center'} ${isOnline ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-800'}`}
                         title={isOnline ? 'Connection is active.' : 'Application is in offline mode.'}
@@ -122,7 +122,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, user, on
                 <div className="mt-2 flex justify-center">
                     <button 
                         onClick={() => setIsExpanded(prev => !prev)} 
-                        className="p-2 rounded-full text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="p-2 rounded-full text-gray-500 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         aria-label={isExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
                     >
                         <ChevronDoubleLeftIcon className={`w-5 h-5 transition-transform duration-300 ${!isExpanded && 'rotate-180'}`} />

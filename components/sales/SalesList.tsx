@@ -40,9 +40,27 @@ const SalesList: React.FC<SalesListProps> = ({ sales, onSelectSale, storeSetting
 
     return (
         <div className="flow-root">
-            <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+            {/* Mobile card list */}
+            <ul className="md:hidden divide-y divide-gray-200 bg-white border border-gray-200 rounded-md">
+                {sales.map((sale) => (
+                    <li key={sale.transactionId} className="p-4 active:bg-gray-50" onClick={() => onSelectSale(sale)}>
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <div className="text-sm font-semibold text-blue-600">{sale.transactionId}</div>
+                                <div className="mt-0.5 text-xs text-gray-500">{new Date(sale.timestamp).toLocaleString()}</div>
+                                <div className="mt-1 text-sm text-gray-700">{sale.customerName || 'Walk in Customer'}</div>
+                                <div className="mt-2"><PaymentStatusBadge status={sale.paymentStatus} /></div>
+                            </div>
+                            <div className="text-right text-sm font-semibold text-gray-900 whitespace-nowrap">{formatCurrency(sale.total, storeSettings)}</div>
+                        </div>
+                    </li>
+                ))}
+            </ul>
+
+            {/* Desktop/tablet table */}
+            <div className="hidden md:block -mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
                 <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-                    <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+                    <div className="overflow-hidden border border-gray-200 sm:rounded-md">
                         <table className="min-w-full divide-y divide-gray-300">
                             <thead className="bg-gray-50">
                                 <tr>

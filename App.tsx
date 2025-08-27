@@ -22,6 +22,10 @@ import AllSalesPage from './pages/AllSalesPage';
 import AuditLogPage from './pages/AuditLogPage';
 import { api, getOnlineStatus, syncOfflineMutations } from './services/api';
 import { dbService } from './services/dbService';
+import Bars3Icon from './components/icons/Bars3Icon';
+
+// Key helper for persisting the last visited page per user
+const getLastPageKey = (userId?: string) => userId ? `salePilot.lastPage.${userId}` : 'salePilot.lastPage';
 
 export type SnackbarType = 'success' | 'error' | 'info' | 'sync';
 
@@ -66,7 +70,8 @@ const App: React.FC = () => {
     const [isAuthLoading, setIsAuthLoading] = useState(true);
     const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
     const [installPrompt, setInstallPrompt] = useState<any | null>(null); // PWA install prompt event
-
+    // Mobile sidebar state
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     // --- Offline State ---
     const [isOnline, setIsOnline] = useState(getOnlineStatus());
@@ -98,6 +103,20 @@ const App: React.FC = () => {
         });
     };
 
+    // Close mobile sidebar on Escape
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setIsSidebarOpen(false);
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, []);
+
+    // Close mobile sidebar after navigation
+    useEffect(() => {
+        setIsSidebarOpen(false);
+    }, [currentPage]);
+
     const hasAccess = (page: string, role: User['role']) => {
         return PERMISSIONS[role].includes(page);
     };
@@ -105,6 +124,10 @@ const App: React.FC = () => {
     const handleSetCurrentPage = useCallback((page: string) => {
         if (currentUser && hasAccess(page, currentUser.role)) {
             setCurrentPage(page);
+            try {
+                const key = getLastPageKey(currentUser.id);
+                localStorage.setItem(key, page);
+            } catch (_) { /* ignore storage errors */ }
         } else {
             showSnackbar("You don't have permission to access this page.", "error");
         }
@@ -147,8 +170,52 @@ const App: React.FC = () => {
             setStockTakeSession(activeStockTake); // Not caching session as it's highly volatile
 
         } catch (err: any) {
-            setError(err.message);
-            showSnackbar(err.message, 'error');
+            // Fall back to IndexedDB when API calls fail (offline or backend unreachable)
+            try {
+                const [
+                    cachedProducts, cachedCategories, cachedCustomers, cachedSuppliers,
+                    cachedSales, cachedPOs, cachedAccounts, cachedJournalEntries, cachedSupplierInvoices,
+                    cachedUsers, cachedReturns, cachedLogs,
+                ] = await Promise.all([
+                    dbService.getAll<Product>('products'), dbService.getAll<Category>('categories'),
+                    dbService.getAll<Customer>('customers'), dbService.getAll<Supplier>('suppliers'),
+                    dbService.getAll<Sale>('sales'), dbService.getAll<PurchaseOrder>('purchaseOrders'),
+                    dbService.getAll<Account>('accounts'), dbService.getAll<JournalEntry>('journalEntries'),
+                    dbService.getAll<SupplierInvoice>('supplierInvoices'), dbService.getAll<User>('users'),
+                    dbService.getAll<Return>('returns'), dbService.getAll<AuditLog>('auditLogs'),
+                ]);
+
+                const cachedSettings = await dbService.get<StoreSettings>('settings', 'main');
+
+                // Apply cached data to state (use empty arrays if none)
+                setProducts(cachedProducts || []);
+                setCategories(cachedCategories || []);
+                setCustomers(cachedCustomers || []);
+                setSuppliers(cachedSuppliers || []);
+                setSales(cachedSales || []);
+                setPurchaseOrders(cachedPOs || []);
+                setAccounts(cachedAccounts || []);
+                setJournalEntries(cachedJournalEntries || []);
+                setSupplierInvoices(cachedSupplierInvoices || []);
+                setUsers(cachedUsers || []);
+                setReturns(cachedReturns || []);
+                setAuditLogs(cachedLogs || []);
+
+                if (cachedSettings) {
+                    setStoreSettings(cachedSettings);
+                } else {
+                    setStoreSettings(null);
+                }
+
+                // StockTake session is not persisted offline; keep null in fallback
+                setStockTakeSession(null);
+
+                // Keep an error message to inform the user, but allow operation with cached data
+                setError(err.message || 'Offline: using cached data');
+            } catch (fallbackErr: any) {
+                // If even the cache fails, surface the original error
+                setError(err.message || fallbackErr?.message || 'Failed to load data');
+            }
         } finally {
             setIsLoading(false);
         }
@@ -189,12 +256,28 @@ const App: React.FC = () => {
             if (localUser && localUser.token) {
                 try {
                     const verifiedUser = await verifySession();
-                    setCurrentUser({ ...verifiedUser, token: localUser.token });
-                    setCurrentPage(DEFAULT_PAGES[verifiedUser.role]);
+                    const authedUser = { ...verifiedUser, token: localUser.token } as User;
+                    setCurrentUser(authedUser);
+                    // Restore last page if available and permitted, otherwise default for role
+                    try {
+                        const key = getLastPageKey(authedUser.id);
+                        const saved = localStorage.getItem(key) || localStorage.getItem(getLastPageKey());
+                        const fallback = DEFAULT_PAGES[authedUser.role];
+                        setCurrentPage(saved && hasAccess(saved, authedUser.role) ? saved : fallback);
+                    } catch (_) {
+                        setCurrentPage(DEFAULT_PAGES[authedUser.role]);
+                    }
                 } catch (error) {
                     console.log("Session verification failed, running in offline mode.");
-                    setCurrentUser(localUser); // Assume user is valid offline
-                    setCurrentPage(DEFAULT_PAGES[localUser.role]);
+                    setCurrentUser(localUser as User); // Assume user is valid offline
+                    try {
+                        const key = getLastPageKey(localUser.id);
+                        const saved = localStorage.getItem(key) || localStorage.getItem(getLastPageKey());
+                        const fallback = DEFAULT_PAGES[localUser.role];
+                        setCurrentPage(saved && hasAccess(saved, localUser.role) ? saved : fallback);
+                    } catch (_) {
+                        setCurrentPage(DEFAULT_PAGES[localUser.role]);
+                    }
                 }
             }
             setIsAuthLoading(false);
@@ -239,23 +322,75 @@ const App: React.FC = () => {
 
     const handleSaveProduct = async (productData: Product | Omit<Product, 'id'>): Promise<Product> => {
         try {
-            const isUpdating = 'id' in productData && !!productData.id;
+            const isUpdating = 'id' in productData && !!(productData as Product).id;
+
+            // Special case: some callers (e.g., ProductFormModal) already perform the API call
+            // and pass back the saved Product. If this product is not yet in our state,
+            // insert it immediately and skip making another request.
+            if (isUpdating) {
+                const incoming = productData as Product;
+                const exists = products.some(p => p.id === incoming.id);
+                if (!exists) {
+                    setProducts(prev => [incoming, ...prev]);
+                    showSnackbar('Product added successfully!', 'success');
+                    return incoming;
+                }
+            }
+
+            // Use FormData for both creating and updating to consistently handle images (kept for future compatibility)
+            const formData = new FormData();
+            Object.keys(productData).forEach(key => {
+                const value = (productData as any)[key];
+                if (key === 'images' && Array.isArray(value)) {
+                    value.forEach(image => {
+                        // We only append new files, not existing URL strings
+                        if (image instanceof File) {
+                            formData.append('images', image);
+                        }
+                    });
+                } else if (value !== null && value !== undefined) {
+                    formData.append(key, value);
+                }
+            });
+
+            // If updating, send existing image URLs so the backend knows what to keep
+            if (isUpdating && (productData as Product).imageUrls) {
+                formData.append('existing_images', JSON.stringify((productData as Product).imageUrls));
+            }
+
             const savedProduct = isUpdating
-                ? await api.put<Product & { offline?: boolean }>(`/products/${productData.id}`, productData)
+                ? await api.put<Product & { offline?: boolean }>(`/products/${(productData as Product).id}`, productData)
+                // Send as JSON, the backend handles both content types now.
                 : await api.post<Product & { offline?: boolean }>('/products', productData);
 
-            if (savedProduct.offline) {
-                showSnackbar(`Offline: Change for "${productData.name}" queued.`, 'info');
-                // Return a temporary product-like object for UI updates.
-                const tempId = isUpdating ? productData.id : `offline_${Date.now()}`;
-                return { ...productData, id: tempId } as Product;
+            if ((savedProduct as any).offline) {
+                showSnackbar(`Offline: Change for "${(productData as any).name}" queued.`, 'info');
+                const tempId = isUpdating ? (productData as Product).id : `offline_${Date.now()}`;
+                const tempProduct = { ...(productData as any), id: tempId, imageUrls: [] } as Product;
+                // UI update for offline
+                if (isUpdating) {
+                    setProducts(prev => prev.map(p => p.id === tempId ? tempProduct : p));
+                } else {
+                    setProducts(prev => [tempProduct, ...prev]);
+                }
+                // Persist to IndexedDB so details remain available after reload while offline
+                try { await dbService.put('products', tempProduct); } catch (_) {}
+                return tempProduct;
             } else {
                 showSnackbar(`Product ${isUpdating ? 'updated' : 'added'} successfully!`, 'success');
-                fetchData(); // Refetch to get latest server state
+                // Update state directly instead of calling fetchData()
+                if (isUpdating) {
+                    setProducts(prev => prev.map(p => p.id === (savedProduct as Product).id ? (savedProduct as Product) : p));
+                } else {
+                    // Add the new product to the top of the list
+                    setProducts(prev => [savedProduct as Product, ...prev]);
+                }
                 return savedProduct as Product;
             }
         } catch (err: any) {
-            showSnackbar(err.message, 'error');
+            // The error message from the backend is more user-friendly
+            const message = err.response?.data?.message || err.message;
+            showSnackbar(message, 'error');
             throw err;
         }
     };
@@ -314,7 +449,7 @@ const App: React.FC = () => {
                  showSnackbar('Offline: Stock adjustment queued.', 'info');
             } else {
                 setProducts(await api.get('/products'));
-                showSnackbar('Stock count updated successfully.', 'success');
+                showSnackbar('Stock adjusted successfully.', 'success');
             }
         } catch (err: any) {
             showSnackbar(err.message, 'error');
@@ -374,15 +509,41 @@ const App: React.FC = () => {
     };
 
     const handleRecordPayment = async (saleId: string, payment: Omit<Payment, 'id'>) => {
+        // Optimistic UI update before awaiting API to ensure immediate UI feedback
+        const previousSales = sales;
+        const previousCustomers = customers;
+
+        const currentSale = sales.find(s => s.transactionId === saleId);
+        if (currentSale) {
+            const newAmountPaid = (currentSale.amountPaid || 0) + payment.amount;
+            const newStatus: Sale['paymentStatus'] = newAmountPaid >= currentSale.total ? 'paid' : 'partially_paid';
+            setSales(prev => prev.map(s => s.transactionId === saleId ? {
+                ...s,
+                amountPaid: newAmountPaid,
+                paymentStatus: newStatus,
+                payments: [...(s.payments || []), { id: `temp_${Date.now()}`, ...payment }]
+            } : s));
+            if (currentSale.customerId) {
+                setCustomers(prev => prev.map(c => c.id === currentSale.customerId ? {
+                    ...c,
+                    accountBalance: Math.max(0, c.accountBalance - payment.amount)
+                } : c));
+            }
+        }
+
         try {
             const result = await api.post<Sale>(`/sales/${saleId}/payments`, payment);
-             if (result.offline) {
+            if (result.offline) {
                 showSnackbar('Offline: Payment record queued.', 'info');
-             } else {
+            } else {
                 showSnackbar('Payment recorded.', 'success');
+                // Re-sync to ensure amounts and payments list are consistent with server (IDs, timestamps)
                 fetchData();
-             }
+            }
         } catch (err: any) {
+            // Rollback optimistic update on error
+            setSales(previousSales);
+            setCustomers(previousCustomers);
             showSnackbar(err.message, 'error');
         }
     };
@@ -644,10 +805,38 @@ const App: React.FC = () => {
 
     return (
         <div className="flex h-screen bg-gray-100 font-sans">
-            <Sidebar currentPage={currentPage} setCurrentPage={handleSetCurrentPage} user={currentUser} onLogout={handleLogout} isOnline={isOnline} />
+            {/* Mobile overlay/backdrop */}
+            {isSidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-black/40 z-30 md:hidden"
+                    onClick={() => setIsSidebarOpen(false)}
+                    aria-hidden="true"
+                />
+            )}
+
+            {/* Sidebar container: slides on mobile, static on desktop */}
+            <div id="app-sidebar" className={`fixed inset-y-0 left-0 z-40 transform transition-transform duration-200 ease-out md:static md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:block`}>
+                <Sidebar currentPage={currentPage} setCurrentPage={handleSetCurrentPage} user={currentUser} onLogout={handleLogout} isOnline={isOnline} />
+            </div>
+
+            {/* Main content */}
             <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Mobile top bar with menu button */}
+                <div className="md:hidden h-12 bg-gray-100 border-b border-gray-200 flex items-center px-3">
+                    <button
+                        onClick={() => setIsSidebarOpen(true)}
+                        className="p-2 rounded-md text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        aria-label="Open menu"
+                        aria-controls="app-sidebar"
+                        aria-expanded={isSidebarOpen}
+                    >
+                        <Bars3Icon className="w-6 h-6" />
+                    </button>
+                    <span className="ml-2 font-semibold text-gray-800">Menu</span>
+                </div>
                 {renderPage()}
             </div>
+
             {snackbar && <Snackbar message={snackbar.message} type={snackbar.type} onClose={() => setSnackbar(null)} />}
             <LogoutConfirmationModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} onConfirm={handleConfirmLogout} />
         </div>

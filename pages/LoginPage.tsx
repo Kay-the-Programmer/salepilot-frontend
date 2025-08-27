@@ -128,13 +128,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, showSnackbar }) => {
                             <div>
                                 <label htmlFor="email-address" className="sr-only">Email address</label>
                                 <input id="email-address" name="email" type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-md border-gray-300 placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full px-4 py-3 rounded-md border placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                     placeholder="Email address (e.g., admin@sale-pilot.com)" />
                             </div>
                              <div>
                                 <label htmlFor="password" className="sr-only">Password</label>
                                 <input id="password" name="password" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-md border-gray-300 placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full px-4 py-3 rounded-md border placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                     placeholder="Password (any for mock login)" />
                             </div>
 

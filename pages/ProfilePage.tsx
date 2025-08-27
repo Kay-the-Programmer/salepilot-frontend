@@ -30,6 +30,11 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onLogout, installPrompt
     const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
     const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
 
+    // Platform detection for install guidance
+    const ua = typeof window !== 'undefined' ? (window.navigator.userAgent || '') : '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac') && typeof document !== 'undefined' && 'ontouchend' in document);
+    const isStandalone = (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || (typeof window !== 'undefined' && (window as any).navigator?.standalone);
+
     const handleSaveProfile = async (userData: { name: string; email: string }) => {
         try {
             await onUpdateProfile(userData);
@@ -114,6 +119,16 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onLogout, installPrompt
                                         <span>Install App on this Device</span>
                                         <ArrowDownTrayIcon className="w-5 h-5"/>
                                     </button>
+                                    {/* Install guidance note */}
+                                    <p className="text-xs text-gray-500 px-3">
+                                        {isStandalone ? (
+                                            <span>The app is already installed and running in standalone mode.</span>
+                                        ) : isIOS ? (
+                                            <span>On iPhone/iPad: Open this site in Safari, tap the Share button, then choose "Add to Home Screen" to install.</span>
+                                        ) : (
+                                            <span>On Android or desktop browsers: You should see an install prompt here when available, or use your browser menu (Install App/Add to Home Screen).</span>
+                                        )}
+                                    </p>
                                     <button onClick={() => setIsChangePasswordModalOpen(true)} className="w-full text-left p-3 rounded-md hover:bg-gray-100 flex justify-between items-center text-sm font-medium text-gray-700">
                                         <span>Change Password</span>
                                         <span>›</span>

@@ -9,6 +9,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import ArrowDownTrayIcon from '../components/icons/ArrowDownTrayIcon';
 import { api } from '../services/api';
+import { dbService } from '../services/dbService';
 
 interface AllSalesPageProps {
     customers: Customer[];
@@ -55,7 +56,74 @@ const AllSalesPage: React.FC<AllSalesPageProps> = ({ customers, storeSettings })
                 setTotal(fetchedSales.total);
                 setDailySales((daily as any).daily || []);
             } catch (err: any) {
-                setError(err.message || 'Failed to fetch sales data.');
+                // Offline fallback: read sales from IndexedDB and compute filters/pagination locally
+                try {
+                    const allSales = await dbService.getAll<Sale>('sales');
+
+                    const start = startDate ? new Date(startDate + 'T00:00:00') : null;
+                    const end = endDate ? new Date(endDate + 'T23:59:59.999') : null;
+
+                    let filtered = allSales.filter(s => {
+                        const ts = new Date(s.timestamp);
+                        if (start && ts < start) return false;
+                        if (end && ts > end) return false;
+                        if (selectedCustomerId && String(s.customerId || '') !== String(selectedCustomerId)) return false;
+                        if (selectedStatus && s.paymentStatus !== (selectedStatus as any)) return false;
+                        return true;
+                    });
+
+                    // Sort by timestamp desc to mimic server
+                    filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+                    const totalCount = filtered.length;
+                    const startIdx = (page - 1) * pageSize;
+                    const pageItems = filtered.slice(startIdx, startIdx + pageSize);
+
+                    setSalesData(pageItems);
+                    setTotal(totalCount);
+
+                    // Build daily sales if both dates are provided
+                    if (start && end) {
+                        const dailyMap = new Map<string, { date: string; totalRevenue: number; totalQuantity: number; items: { name: string; quantity: number; revenue: number }[] }>();
+                        const itemsAggMap = new Map<string, Map<string, { quantity: number; revenue: number }>>(); // date -> name -> agg
+
+                        for (const sale of filtered) {
+                            const d = new Date(sale.timestamp);
+                            const key = d.toISOString().slice(0, 10);
+                            if (d < start || d > end) continue;
+
+                            if (!dailyMap.has(key)) {
+                                dailyMap.set(key, { date: key, totalRevenue: 0, totalQuantity: 0, items: [] });
+                                itemsAggMap.set(key, new Map());
+                            }
+                            const day = dailyMap.get(key)!;
+                            day.totalRevenue += sale.total || 0;
+
+                            for (const it of sale.cart || []) {
+                                day.totalQuantity += it.quantity || 0;
+                                const perDay = itemsAggMap.get(key)!;
+                                const prev = perDay.get(it.name) || { quantity: 0, revenue: 0 };
+                                prev.quantity += it.quantity || 0;
+                                prev.revenue += (it.price || 0) * (it.quantity || 0);
+                                perDay.set(it.name, prev);
+                            }
+                        }
+
+                        const dailyArr = Array.from(dailyMap.values()).map(day => {
+                            const perDay = itemsAggMap.get(day.date)!;
+                            day.items = Array.from(perDay.entries()).map(([name, v]) => ({ name, quantity: v.quantity, revenue: v.revenue }));
+                            return day;
+                        }).sort((a, b) => b.date.localeCompare(a.date));
+
+                        setDailySales(dailyArr);
+                    } else {
+                        setDailySales([]);
+                    }
+
+                    setError(null); // Clear error because we have offline data
+                } catch (fallbackErr: any) {
+                    setError(err.message || 'Failed to fetch sales data.');
+                }
             } finally {
                 setIsLoading(false);
             }

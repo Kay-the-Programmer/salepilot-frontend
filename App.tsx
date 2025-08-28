@@ -175,7 +175,8 @@ const App: React.FC = () => {
 
             // Handle single-item stores
             setStoreSettings(loadedSettings); dbService.put('settings', loadedSettings, 'main');
-            setStockTakeSession(activeStockTake); // Not caching session as it's highly volatile
+            setStockTakeSession(activeStockTake);
+            // Do not cache active stock take when online; session is volatile and kept server-side
 
         } catch (err: any) {
             // Fall back to IndexedDB when API calls fail (offline or backend unreachable)
@@ -215,8 +216,9 @@ const App: React.FC = () => {
                     setStoreSettings(null);
                 }
 
-                // StockTake session is not persisted offline; keep null in fallback
-                setStockTakeSession(null);
+                // Try restore an offline stock take session from local cache
+                const localStockTake = await dbService.get<StockTakeSession>('settings', 'activeStockTake');
+                setStockTakeSession(localStockTake || null);
 
                 // Keep an error message to inform the user, but allow operation with cached data
                 setError(err.message || 'Offline: using cached data');
@@ -641,10 +643,32 @@ const App: React.FC = () => {
 
     const handleStartStockTake = async () => {
         try {
-            const newSession = await api.post<StockTakeSession>('/stock-takes', {});
-            setStockTakeSession(newSession);
-            handleSetCurrentPage('stock-takes');
-            showSnackbar('New stock take session started.', 'info');
+            const result = await api.post<StockTakeSession>('/stock-takes', {});
+            if ((result as any)?.offline) {
+                // Create a local offline session using current products as baseline
+                const offlineSession: StockTakeSession = {
+                    id: `local-${Date.now()}`,
+                    startTime: new Date().toISOString(),
+                    status: 'active',
+                    items: products
+                        .filter(p => p.status !== 'archived')
+                        .map(p => ({
+                            productId: p.id,
+                            name: p.name,
+                            sku: p.sku,
+                            expected: p.stock,
+                            counted: null,
+                        }))
+                };
+                setStockTakeSession(offlineSession);
+                await dbService.put('settings', offlineSession, 'activeStockTake');
+                handleSetCurrentPage('stock-takes');
+                showSnackbar('Offline: Stock take started. Changes will sync when back online.', 'info');
+            } else {
+                setStockTakeSession(result as StockTakeSession);
+                handleSetCurrentPage('stock-takes');
+                showSnackbar('New stock take session started.', 'info');
+            }
         } catch (err: any) {
             showSnackbar(err.message, 'error');
         }
@@ -652,8 +676,21 @@ const App: React.FC = () => {
 
     const handleUpdateStockTakeItem = async (productId: string, count: number | null) => {
         try {
-            const updatedSession = await api.put<StockTakeSession>(`/stock-takes/active/items/${productId}`, { count });
-            setStockTakeSession(updatedSession);
+            const result = await api.put<StockTakeSession>(`/stock-takes/active/items/${productId}`, { count });
+            if ((result as any)?.offline) {
+                // Update local session
+                setStockTakeSession(prev => {
+                    if (!prev) return prev;
+                    const updated: StockTakeSession = {
+                        ...prev,
+                        items: prev.items.map(i => i.productId === productId ? { ...i, counted: count } : i)
+                    };
+                    dbService.put('settings', updated, 'activeStockTake');
+                    return updated;
+                });
+            } else {
+                setStockTakeSession(result as StockTakeSession);
+            }
         } catch (err: any) {
             showSnackbar(err.message, 'error');
         }
@@ -662,9 +699,15 @@ const App: React.FC = () => {
     const handleCancelStockTake = async () => {
         if (window.confirm('Are you sure you want to cancel? All progress will be lost.')) {
             try {
-                await api.delete('/stock-takes/active');
+                const result = await api.delete('/stock-takes/active');
                 setStockTakeSession(null);
-                showSnackbar('Stock take cancelled.', 'info');
+                // Clear local offline session if any
+                await dbService.put('settings', null as any, 'activeStockTake');
+                if ((result as any)?.offline) {
+                    showSnackbar('Offline: Cancellation queued.', 'info');
+                } else {
+                    showSnackbar('Stock take cancelled.', 'info');
+                }
             } catch (err: any) {
                 showSnackbar(err.message, 'error');
             }
@@ -673,10 +716,15 @@ const App: React.FC = () => {
 
     const handleFinalizeStockTake = async () => {
         try {
-            await api.post('/stock-takes/active/finalize', {});
-            showSnackbar('Stock take complete and inventory updated.', 'success');
+            const result = await api.post('/stock-takes/active/finalize', {});
             setStockTakeSession(null);
-            fetchData();
+            await dbService.put('settings', null as any, 'activeStockTake');
+            if ((result as any)?.offline) {
+                showSnackbar('Offline: Finalization queued. Inventory will update once online.', 'info');
+            } else {
+                showSnackbar('Stock take complete and inventory updated.', 'success');
+                fetchData();
+            }
         } catch (err: any) {
             showSnackbar(err.message, 'error');
         }
